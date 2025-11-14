@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { PaystackButton } from "react-paystack";
 import { useCart } from "../context/CardContext";
 import Navbar from "../components/Navbar";
 import Hero from "../components/Hero";
@@ -8,38 +7,41 @@ const CheckoutPage: React.FC = () => {
   const { cartItems, totalAmount, clearCart } = useCart();
   const [shippingMethod, setShippingMethod] = useState<string>("standard");
 
-  const publicKey = "pk_test_yourpublickey"; // Replace with your Paystack public key
-  const email = "customer@example.com"; // Replace with actual user email
+  const handleCheckout = async () => {
+    try {
+      const res = await fetch("https://your-backend.com/api/create-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: totalAmount,
+          items: cartItems,
+          shippingMethod,
+        }),
+      });
 
-  const componentProps = {
-    email,
-    amount: totalAmount * 100,
-    metadata: { cart: cartItems },
-    publicKey,
-    text: "Pay with Paystack",
-    onSuccess: (response: any) => {
-      alert("Payment Successful! Reference: " + response.reference);
-      // Here you can send order + payment info to backend
-      clearCart();
-    },
-    onClose: () => alert("Payment cancelled."),
+      const data = await res.json();
+
+      // backend returns payment link (Paystack / Flutterwave / anything)
+      window.location.href = data.payment_url;
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong. Try again.");
+    }
   };
 
   return (
     <>
       <Navbar />
 
-      {/* Hero Section for Checkout */}
       <Hero
         title="Finalize Your Order"
         subtitle="Please review your cart, add delivery details, and complete your purchase securely."
-        
       />
 
-      {/* Checkout Section */}
       <section className="max-w-7xl mx-auto px-4 py-10">
         <div className="flex flex-col lg:flex-row gap-8">
-          {/* Left: Delivery Details */}
+          
+          {/* LEFT: Delivery Details */}
           <div className="flex-1 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
             <h2 className="text-2xl font-semibold mb-4">Delivery Details</h2>
 
@@ -65,11 +67,13 @@ const CheckoutPage: React.FC = () => {
             </select>
           </div>
 
-          {/* Right: Your Orders */}
+          {/* RIGHT: Orders */}
           <div className="flex-1 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
             <h2 className="text-2xl font-semibold mb-4">Your Orders</h2>
+
             <div className="flex flex-col gap-3 mb-4 max-h-96 overflow-y-auto">
               {cartItems.length === 0 && <p>No items in cart.</p>}
+
               {cartItems.map((item, index) => (
                 <div
                   key={index}
@@ -85,18 +89,12 @@ const CheckoutPage: React.FC = () => {
 
             <p className="text-lg font-semibold mb-4">Total: ₦{totalAmount}</p>
 
-            {/* Paystack Button */}
-            <PaystackButton
-              {...componentProps}
-              className="w-full bg-primary text-white py-3 rounded-lg mb-4 hover:opacity-90"
-            />
-
-            {/* Place Order Button */}
+            {/* Checkout button that calls backend */}
             <button
-              onClick={() => alert("Order placed!")}
+              onClick={handleCheckout}
               className="w-full bg-green-600 text-white py-3 rounded-lg hover:opacity-90"
             >
-              Place Your Order
+              Proceed to Payment
             </button>
           </div>
         </div>
