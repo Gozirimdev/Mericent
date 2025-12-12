@@ -16,6 +16,7 @@ import Alert from "../components/Alert";
 const clothingSizes = ["S", "M", "L", "XL", "XXL"];
 
 const Product: React.FC = () => {
+
   const { category } = useParams<{ category?: string }>();
   const { addToCart } = useCart();
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
@@ -86,6 +87,13 @@ const Product: React.FC = () => {
     }));
   };
 
+  const fetchProduct = async ()=>{
+    const product = await fetch('http://localhost:4444/api/product');
+    const data = await product.json();
+    console.log(data);
+  }
+
+  fetchProduct();
   return (
     <section className="py-10 bg-milk dark:bg-darkblack transition-colors duration-300 relative">
       <div className="max-w-7xl mx-auto px-4">
@@ -122,13 +130,13 @@ const Product: React.FC = () => {
                   <img
                     src={wear.img}
                     alt={wear.name}
-                    className="w-full h-60 object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-32 lg:h-60 object-cover group-hover:scale-105 transition-transform duration-300"
                   />
                 </div>
 
                 <div className="px-2 py-4 lg:p-4 text-start">
                   <p className="font-semibold text-gray-900 dark:text-white text-base mb-1">
-                    {wear.name}
+                   <a href=""> {wear.name} </a>
                   </p>
                   <p className="text-primary font-bold mb-3">{wear.price}</p>
 

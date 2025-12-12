@@ -5,6 +5,7 @@ import CartPage from "./pages/CartPage";
 import { CartProvider } from "./context/CardContext";
 import Checkout from "./pages/Checkout";
 import AdminDashboard from "./admin/AdminDashboard";
+import LoginModal from "./components/LoginModal";
 
 const App: React.FC = () => {
   return (
@@ -15,6 +16,7 @@ const App: React.FC = () => {
           <Route path="/cart" element={<CartPage />} />
           <Route path="/checkout" element={<Checkout />} />
           <Route path="/admin" element={<AdminDashboard />} />
+          <Route path="/login" element={<LoginModal />} />
 
 
         </Routes>
