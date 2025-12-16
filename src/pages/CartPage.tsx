@@ -1,8 +1,10 @@
 import React from "react";
 import { useCart } from "../context/CardContext";
+import { useNavigate } from "react-router-dom";
 
 const CartPage: React.FC = () => {
-  const { cartItems, increaseQty, decreaseQty, totalPrice } = useCart();
+  const { cartItems, increaseQty, decreaseQty, totalAmount } = useCart();
+  const navigate = useNavigate();
 
   if (cartItems.length === 0)
     return (
@@ -52,8 +54,17 @@ const CartPage: React.FC = () => {
         ))}
       </div>
 
-      <div className="mt-6 flex justify-end items-center gap-4 text-xl font-bold text-gray-900 dark:text-white">
-        Total: N{totalPrice.toFixed(2)}
+      <div className="mt-6 flex justify-between items-center gap-4">
+        <div />
+        <div className="flex items-center gap-4">
+          <div className="text-lg font-semibold">Total: ₦{Number(totalAmount).toLocaleString()}</div>
+          <button
+            onClick={() => navigate("/checkout")}
+            className="bg-primary text-white py-2 px-4 rounded-lg hover:opacity-90"
+          >
+            Checkout
+          </button>
+        </div>
       </div>
     </div>
     </div>

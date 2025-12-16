@@ -6,6 +6,7 @@ import flag from "../assets/9ja.png";
 import { useCart } from "../context/CardContext";
 import CartModal from "./CartModal";
 import SignupModal from "./SignupModal";
+import LoginModal from "./LoginModal";
 
 
 const Navbar: React.FC = () => {
@@ -14,9 +15,17 @@ const Navbar: React.FC = () => {
   const [search, setSearch] = useState("");
   const [showCart, setShowCart] = useState(false);
     const [showSignup, setShowSignup] = useState(false);
+    const [showLogin, setShowLogin] = useState(false);
 
 
   const { cartCount } = useCart();
+  const isAdmin = Boolean(typeof window !== 'undefined' && localStorage.getItem('admin_token'));
+
+  const handleAdminLogout = () => {
+    localStorage.removeItem('admin_token');
+    localStorage.removeItem('admin_user');
+    window.location.href = '/';
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,7 +40,7 @@ const Navbar: React.FC = () => {
           {/* Logo */}
           <div className="flex items-center flex-shrink-0">
             <h1 className="text-2xl md:text-3xl font-bold whitespace-nowrap">
-              <span className="text-primary">M</span>erciens
+              <span className="text-primary">M</span>ercient
             </h1>
           </div>
 
@@ -82,10 +91,21 @@ const Navbar: React.FC = () => {
 
             {/* ✅ Sign Up Button (Restored) */}
             <button
-                      onClick={() => setShowSignup(true)}
-             className="hidden md:inline-block bg-primary text-white text-sm px-4 py-2 rounded-full hover:bg-secondary transition-colors">
+              onClick={() => setShowSignup(true)}
+              className="hidden md:inline-block bg-primary text-white text-sm px-4 py-2 rounded-full hover:bg-secondary transition-colors"
+            >
               Sign Up
             </button>
+
+            {/* Admin controls (only visible if admin token present) */}
+            {isAdmin ? (
+              <div className="hidden md:flex items-center gap-2">
+                <a href="/admin" className="text-sm px-2 py-1 hover:underline">Admin</a>
+                <button onClick={handleAdminLogout} className="text-sm px-2 py-1 text-red-600">Logout</button>
+              </div>
+            ) : (
+              <a href="/admin/login" className="hidden md:inline text-sm px-2 py-1 hover:underline">Admin Login</a>
+            )}
 
             {/* Mobile Menu Toggle */}
             <button
@@ -134,7 +154,15 @@ className="w-full bg-primary text-white text-sm px-4 py-2 rounded-full hover:bg-
           </div>
         )}
       </nav>
-            <SignupModal isOpen={showSignup} onClose={() => setShowSignup(false)} />
+            <SignupModal
+              isOpen={showSignup}
+              onClose={() => setShowSignup(false)}
+              openLogin={() => {
+                setShowSignup(false);
+                setShowLogin(true);
+              }}
+            />
+            <LoginModal isOpen={showLogin} onClose={() => setShowLogin(false)} />
 
 
       {/* ✅ Cart Popup */}

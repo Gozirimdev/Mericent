@@ -18,7 +18,9 @@ const OrdersList: React.FC<OrdersListProps> = ({ orders }) => {
             <p>Items:</p>
             <ul className="pl-4 list-disc">
               {order.items.map((item: any, i: number) => (
-                <li key={i}>{item.name} {item.size ? `(${item.size})` : ""} - ₦{item.price}</li>
+                <li key={i}>
+                  {item.name} {item.size ? `(${item.size})` : ""} {item.color ? `• ${item.color}` : ""} - ₦{item.price}
+                </li>
               ))}
             </ul>
           </div>

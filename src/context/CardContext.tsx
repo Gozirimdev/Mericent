@@ -7,6 +7,9 @@ export interface ProductItem {
   name: string;
   price: string; // e.g. "$50"
   button: string;
+  size?: string; // optional size field to support products with size
+  color?: string; // optional color field to track selected color
+  category?: string;
 }
 
 export interface CartProduct extends ProductItem {
@@ -20,6 +23,8 @@ interface CartContextType {
   increaseQty: (itemName: string) => void;
   decreaseQty: (itemName: string) => void;
   totalPrice: number;
+  totalAmount: number;
+  clearCart: () => void;
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -68,6 +73,12 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     return total + priceNumber * item.quantity;
   }, 0);
 
+  // expose alias expected by other components
+  const totalAmount = totalPrice;
+
+  // clear cart after successful checkout
+  const clearCart = () => setCartItems([]);
+
   // ✅ Count total quantity across all items
   const totalQuantity = cartItems.reduce(
     (total, item) => total + item.quantity,
@@ -83,6 +94,8 @@ export const CartProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         increaseQty,
         decreaseQty,
         totalPrice,
+        totalAmount,
+        clearCart,
       }}
     >
       {children}

@@ -7,10 +7,10 @@ import Footer from "../components/Footer";
 
 const Home: React.FC = () => {
   return (
-    <div className="bg-milk dark:bg-darkblack min-h-screen text-slate-900 dark:text-white transition-colors duration-300">
+    <div className="bg-milk overflow-hidden dark:bg-darkblack min-h-screen text-slate-900 dark:text-white transition-colors duration-300">
       <Navbar />
       <div className="pt-18">
-        <Hero />
+        <Hero/>
         <div className="mt-6">
           <CategoryNav />
           <Product />

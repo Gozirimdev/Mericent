@@ -91,7 +91,8 @@ const CheckoutPage: React.FC = () => {
 
       const data = await res.json();
       if (data.payment_url) {
-        // redirect to payment provider
+        // clear the cart locally then redirect to payment provider
+        clearCart();
         window.location.href = data.payment_url;
       } else {
         console.error("create-payment response:", data);
@@ -182,22 +183,46 @@ const CheckoutPage: React.FC = () => {
           <div className="flex-1 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
             <h2 className="text-2xl font-semibold mb-4">Your Orders</h2>
 
-            <div className="flex flex-col gap-3 mb-4 max-h-96 overflow-y-auto">
-              {cartItems.length === 0 && <p>No items in cart.</p>}
-
-              {cartItems.map((item, index) => (
-                <div
-                  key={item.id ?? index}
-                  className="flex justify-between items-center border-b border-gray-300 dark:border-gray-600 pb-2"
-                >
-                  <span>
-                    {item.name} {item.size ? `(${item.size})` : ""} × {item.quantity ?? 1}
-                  </span>
-                  <span className="font-semibold">
-                    ₦{((item.price ?? 0) * (item.quantity ?? 1)).toLocaleString()}
-                  </span>
-                </div>
-              ))}
+            <div className="overflow-x-auto mb-4">
+              {cartItems.length === 0 ? (
+                <p>No items in cart.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="text-left text-gray-600 dark:text-gray-300">
+                      <th className="pb-2">Item</th>
+                      <th className="pb-2">Details</th>
+                      <th className="pb-2 text-center">Qty</th>
+                      <th className="pb-2 text-right">Unit</th>
+                      <th className="pb-2 text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cartItems.map((item, index) => {
+                      const unitPrice = parseFloat(String(item.price).replace(/[^0-9.-]+/g, "")) || 0;
+                      const qty = Number(item.quantity || 1);
+                      const lineTotal = unitPrice * qty;
+                      return (
+                        <tr key={index} className="border-b border-gray-200 dark:border-gray-700">
+                          <td className="py-3 flex items-center gap-3 w-1/3">
+                            <img src={item.img} alt={item.name} className="w-12 h-12 object-cover rounded" />
+                            <div>
+                              <div className="font-medium">{item.name}</div>
+                            </div>
+                          </td>
+                          <td className="py-3">
+                            {item.size && <div>Size: <span className="font-medium">{item.size}</span></div>}
+                            {item.color && <div>Color: <span className="font-medium">{item.color}</span></div>}
+                          </td>
+                          <td className="py-3 text-center">{qty}</td>
+                          <td className="py-3 text-right">₦{unitPrice.toLocaleString()}</td>
+                          <td className="py-3 text-right font-semibold">₦{lineTotal.toLocaleString()}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              )}
             </div>
 
             <div className="mb-4">
@@ -277,13 +302,14 @@ const CheckoutPage: React.FC = () => {
                   onChange={(e) =>
                     setDeliveryInfo({ ...deliveryInfo, phoneCode: e.target.value })
                   }
+                    aria-label="Country phone code"
                 >
                   <option value="">Code</option>
-                  {allCountries.map((c) => (
-                    <option key={c.isoCode} value={c.phonecode ?? c.callingCode?.[0] ?? ""}>
-                      {c.flag ?? c.isoCode} {c.name} ({c.callingCode?.[0] ?? ""})
-                    </option>
-                  ))}
+                    {allCountries.map((c) => (
+                      <option key={c.isoCode} value={c.phonecode ?? ""}>
+                        {c.flag ?? c.isoCode} {c.name} ({c.phonecode ?? ""})
+                      </option>
+                    ))}
                 </select>
 
                 <input
@@ -312,6 +338,7 @@ const CheckoutPage: React.FC = () => {
                     cityName: "",
                   });
                 }}
+                aria-label="Country"
               >
                 <option value="">Select Country</option>
                 {allCountries.map((c) => (
@@ -339,6 +366,7 @@ const CheckoutPage: React.FC = () => {
                   });
                 }}
                 disabled={!deliveryInfo.countryIso}
+                aria-label="State"
               >
                 <option value="">{deliveryInfo.countryIso ? "Select State" : "Select Country first"}</option>
                 {deliveryInfo.countryIso &&
@@ -355,6 +383,7 @@ const CheckoutPage: React.FC = () => {
                 value={deliveryInfo.cityName}
                 onChange={(e) => setDeliveryInfo({ ...deliveryInfo, cityName: e.target.value })}
                 disabled={!deliveryInfo.stateIso}
+                aria-label="City"
               >
                 <option value="">{deliveryInfo.stateIso ? "Select City" : "Select State first"}</option>
                 {deliveryInfo.countryIso &&

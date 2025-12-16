@@ -22,6 +22,7 @@ const SignupModal: React.FC<SignupModalProps> = ({ isOpen, onClose, openLogin })
    const loginWithGoogle = () => {
     window.location.href = "http://localhost:4444/auth/google";
   };
+  
   const handleEmailSignup = async () => {
     if (!email || !password || !firstName || !lastName) {
       alert("Please enter firstname, lastname, email and password.");
