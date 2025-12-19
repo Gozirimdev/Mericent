@@ -2,10 +2,9 @@ import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 /**
- * AdminLogin
- * - Example endpoint used: POST /api/admin/login (eg)
+ * Simple Admin Login page (restored)
+ * - Example endpoint: POST /api/admin/login
  * - Expects: { username, password } -> returns { token, user }
- * Replace with your real backend endpoint and error handling.
  */
 const AdminLogin: React.FC = () => {
   const [username, setUsername] = useState("");
@@ -19,16 +18,13 @@ const AdminLogin: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      // Example endpoint - replace with your backend API
       const res = await fetch("/api/admin/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, password }),
       });
-
       const data = await res.json();
       if (res.ok && data.token) {
-        // store token locally for admin-only pages
         localStorage.setItem("admin_token", data.token);
         localStorage.setItem("admin_user", JSON.stringify(data.user || {}));
         navigate("/admin");
@@ -37,6 +33,7 @@ const AdminLogin: React.FC = () => {
       }
     } catch (err) {
       setError("Network error. Try again later.");
+      console.error(err);
     } finally {
       setLoading(false);
     }

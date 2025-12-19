@@ -14,8 +14,15 @@ const RequireAdmin: React.FC<{ children: React.ReactNode }> = ({ children }) => 
   useEffect(() => {
     const check = async () => {
       const token = localStorage.getItem("admin_token");
+      const isLocalHost = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1" || window.location.hostname === "::1");
       if (!token) {
         navigate("/admin/login", { replace: true });
+        return;
+      }
+
+      // Allow a special local dev token to bypass verification when on localhost.
+      if (token === "local-dev-token" && isLocalHost) {
+        setLoading(false);
         return;
       }
 

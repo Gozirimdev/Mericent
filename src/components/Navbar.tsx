@@ -19,13 +19,6 @@ const Navbar: React.FC = () => {
 
 
   const { cartCount } = useCart();
-  const isAdmin = Boolean(typeof window !== 'undefined' && localStorage.getItem('admin_token'));
-
-  const handleAdminLogout = () => {
-    localStorage.removeItem('admin_token');
-    localStorage.removeItem('admin_user');
-    window.location.href = '/';
-  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,15 +90,7 @@ const Navbar: React.FC = () => {
               Sign Up
             </button>
 
-            {/* Admin controls (only visible if admin token present) */}
-            {isAdmin ? (
-              <div className="hidden md:flex items-center gap-2">
-                <a href="/admin" className="text-sm px-2 py-1 hover:underline">Admin</a>
-                <button onClick={handleAdminLogout} className="text-sm px-2 py-1 text-red-600">Logout</button>
-              </div>
-            ) : (
-              <a href="/admin/login" className="hidden md:inline text-sm px-2 py-1 hover:underline">Admin Login</a>
-            )}
+            {/* Admin pages accessible at /admin and /admin/login (not shown in navbar) */}
 
             {/* Mobile Menu Toggle */}
             <button

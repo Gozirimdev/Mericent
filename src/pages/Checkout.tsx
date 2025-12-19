@@ -1,9 +1,23 @@
 // CheckoutPage.tsx
 import React, { useEffect, useState } from "react";
+import type { Order, DeliveryInfo } from "../types/order";
 import { useCart } from "../context/CardContext";
 import Navbar from "../components/Navbar";
 import Hero from "../components/Hero";
-import { Country, State, City } from "country-state-city";
+// country-state-city is used inside DeliveryModal; no direct import needed here
+import DeliveryDetails from "../components/checkout/DeliveryDetails";
+import ShippingSelector from "../components/checkout/ShippingSelector";
+import OrdersTable from "../components/checkout/OrdersTable";
+import RecentOrders from "../components/checkout/RecentOrders";
+import OrderPreviewModal from "../components/checkout/OrderPreviewModal";
+import DeliveryModal from "../components/checkout/DeliveryModal";
+import {
+  fetchShippingOptions,
+  fetchOrders,
+  persistOrderLocal,
+  createOrderOnServer,
+  createPayment,
+} from "../utils/checkout";
 
 /**
  * NOTE:
@@ -15,18 +29,19 @@ import { Country, State, City } from "country-state-city";
 
 const CheckoutPage: React.FC = () => {
   const { cartItems, totalAmount, clearCart } = useCart();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [showOrderModal, setShowOrderModal] = useState(false);
+  const [orderPreview, setOrderPreview] = useState<Order | null>(null);
 
   // Shipping options from admin/backend
-  const [shippingOptions, setShippingOptions] = useState<
-    { state: string; price: number }[]
-  >([]);
-  const [showShippingModal, setShowShippingModal] = useState(false);
+  const [shippingOptions, setShippingOptions] = useState<{ state: string; price: number }[]>([]);
   const [selectedShippingState, setSelectedShippingState] = useState<string>("");
   const [shippingFee, setShippingFee] = useState<number>(0);
+  const [processing, setProcessing] = useState(false);
 
   // Delivery modal
   const [showDeliveryModal, setShowDeliveryModal] = useState(false);
-  const [deliveryInfo, setDeliveryInfo] = useState({
+  const [deliveryInfo, setDeliveryInfo] = useState<DeliveryInfo>({
     fullName: "",
     email: "",
     phoneCode: "",
@@ -38,32 +53,17 @@ const CheckoutPage: React.FC = () => {
     cityName: "",
   });
 
-  // Local UI helpers (phone code list from Country object)
-  const allCountries = Country.getAllCountries();
-
   // Final total includes shipping fee
   const finalTotal = (Number(totalAmount) || 0) + (shippingFee || 0);
 
   // Fetch shipping options from backend (admin-controlled)
   useEffect(() => {
-    const loadShipping = async () => {
-      try {
-        const res = await fetch("/api/shipping-prices");
-        if (!res.ok) throw new Error("Failed to load shipping prices");
-        const data = await res.json();
-        setShippingOptions(data);
-      } catch (err) {
-        console.error("Error loading shipping options:", err);
-        // Optional fallback: show common states if backend unreachable
-        setShippingOptions([
-          { state: "Lagos", price: 2500 },
-          { state: "Abuja (FCT)", price: 3500 },
-          { state: "Rivers", price: 3500 },
-          { state: "Kano", price: 4000 },
-        ]);
-      }
-    };
-    loadShipping();
+    fetchShippingOptions().then(setShippingOptions).catch(() => {});
+  }, []);
+
+  // Load recent orders (backend or localStorage)
+  useEffect(() => {
+    fetchOrders().then(setOrders).catch(() => {});
   }, []);
 
   // Payment handler (sends cart + delivery + shipping to backend)
@@ -73,46 +73,76 @@ const CheckoutPage: React.FC = () => {
       alert("Please provide delivery information before proceeding.");
       return;
     }
+    if (!selectedShippingState) {
+      alert("Please select a shipping location.");
+      return;
+    }
 
+    setProcessing(true);
+    try {
+      const payload: Partial<Order> = {
+        items: cartItems,
+        subtotal: Number(totalAmount) || 0,
+        shipping: { state: selectedShippingState, fee: shippingFee },
+        delivery: deliveryInfo,
+        total: finalTotal,
+        createdAt: new Date().toISOString(),
+      };
+
+      let createdOrder = await createOrderOnServer(payload);
+      if (!createdOrder) {
+        createdOrder = {
+          id: Date.now(),
+          ...payload,
+        } as Order;
+      }
+
+      setOrders(persistOrderLocal(createdOrder));
+      setOrderPreview(createdOrder as Order);
+      setShowOrderModal(true);
+    } catch (error) {
+      console.error(error);
+      alert("Something went wrong. Try again.");
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  // Called after user confirms order in the preview modal — starts payment flow
+  const proceedToPayment = async (order: Order | null) => {
+    if (!order) return;
+    setShowOrderModal(false);
+    setProcessing(true);
     try {
       const res = await fetch("/api/create-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          amount: finalTotal,
-          items: cartItems,
-          shipping: {
-            state: selectedShippingState,
-            fee: shippingFee,
-          },
-          delivery: deliveryInfo,
+          amount: order.total || order.subtotal || 0,
+          items: order.items,
+          shipping: order.shipping,
+          delivery: order.delivery,
+          orderId: order.id,
         }),
       });
-
       const data = await res.json();
       if (data.payment_url) {
-        // clear the cart locally then redirect to payment provider
         clearCart();
         window.location.href = data.payment_url;
       } else {
         console.error("create-payment response:", data);
         alert("Payment URL not returned by backend.");
       }
-    } catch (error) {
-      console.error(error);
-      alert("Something went wrong. Try again.");
+    } catch (err) {
+      console.error(err);
+      alert("Payment initiation failed. Try again.");
+    } finally {
+      setProcessing(false);
     }
   };
 
-  // When user picks a shipping state from modal
-  const onSelectShipping = (opt: { state: string; price: number }) => {
-    setSelectedShippingState(opt.state);
-    setShippingFee(opt.price);
-    setShowShippingModal(false);
-  };
-
   // Save delivery data from modal
-  const onSaveDelivery = (data: typeof deliveryInfo) => {
+  const onSaveDelivery = (data: DeliveryInfo) => {
     setDeliveryInfo(data);
     setShowDeliveryModal(false);
   };
@@ -125,105 +155,41 @@ const CheckoutPage: React.FC = () => {
         subtitle="Please review your cart, add delivery details, and complete your purchase securely."
       />
 
-      <section className="max-w-7xl mx-auto px-4 py-10">
+      <section className="py-10 bg-milk dark:bg-darkblack transition-colors duration-300">
+        <div className="max-w-7xl mx-auto px-4 py-10">
         <div className="flex flex-col lg:flex-row gap-8">
           {/* LEFT: Delivery Details */}
-          <div className="flex-1 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
-            <h2 className="text-2xl font-semibold mb-4">Delivery Details</h2>
+          <div className="flex-1">
+            <DeliveryDetails deliveryInfo={deliveryInfo} onOpenDelivery={() => setShowDeliveryModal(true)} />
 
-            <button
-              onClick={() => setShowDeliveryModal(true)}
-              className="bg-primary text-white py-2 px-4 rounded-lg mb-4 hover:opacity-90"
-            >
-              Add Delivery Details
-            </button>
+            <div className="mt-6 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
+              <h3 className="text-lg font-semibold mb-2">Shipping Method</h3>
+              <ShippingSelector
+                shippingOptions={shippingOptions}
+                selectedShippingState={selectedShippingState}
+                setSelectedShippingState={setSelectedShippingState}
+                setShippingFee={setShippingFee}
+              />
 
-            {deliveryInfo.fullName ? (
-              <div className="mb-4">
-                <p className="font-semibold">{deliveryInfo.fullName}</p>
-                <p className="text-sm">{deliveryInfo.email}</p>
-                <p className="text-sm">
-                  {deliveryInfo.phoneCode} {deliveryInfo.phone}
-                </p>
-                <p className="text-sm">
-                  {deliveryInfo.countryName}
-                  {deliveryInfo.stateName ? `, ${deliveryInfo.stateName}` : ""}{" "}
-                  {deliveryInfo.cityName ? `, ${deliveryInfo.cityName}` : ""}
-                </p>
-              </div>
-            ) : (
-              <p className="mb-4 text-sm text-gray-600">No delivery details yet.</p>
-            )}
+              {selectedShippingState ? (
+                <p className="font-semibold mb-2">Selected: {selectedShippingState} — ₦{shippingFee.toLocaleString()}</p>
+              ) : (
+                <p className="text-sm text-gray-600 mb-2">No shipping location selected.</p>
+              )}
 
-            <h3 className="text-lg font-semibold mb-2">Shipping Method</h3>
-
-            <button
-              onClick={() => setShowShippingModal(true)}
-              className="w-full bg-primary text-white py-2 rounded-lg mb-3 hover:opacity-90"
-            >
-              Select Shipping Location
-            </button>
-
-            {selectedShippingState ? (
-              <p className="font-semibold mb-2">
-                Selected: {selectedShippingState} — ₦{shippingFee.toLocaleString()}
-              </p>
-            ) : (
-              <p className="text-sm text-gray-600 mb-2">No shipping location selected.</p>
-            )}
-
-            <textarea
-              placeholder="Any note to the merchant..."
-              className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2 mb-4 resize-none dark:bg-gray-700 dark:text-white"
-              rows={4}
-            />
+              <textarea
+                placeholder="Any note to the merchant..."
+                className="w-full border border-gray-300 dark:border-gray-600 rounded-lg p-2 mb-4 resize-none dark:bg-gray-700 dark:text-white"
+                rows={4}
+              />
+            </div>
           </div>
 
           {/* RIGHT: Orders */}
           <div className="flex-1 bg-white dark:bg-gray-800 p-6 rounded-xl shadow-md">
             <h2 className="text-2xl font-semibold mb-4">Your Orders</h2>
 
-            <div className="overflow-x-auto mb-4">
-              {cartItems.length === 0 ? (
-                <p>No items in cart.</p>
-              ) : (
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-gray-600 dark:text-gray-300">
-                      <th className="pb-2">Item</th>
-                      <th className="pb-2">Details</th>
-                      <th className="pb-2 text-center">Qty</th>
-                      <th className="pb-2 text-right">Unit</th>
-                      <th className="pb-2 text-right">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cartItems.map((item, index) => {
-                      const unitPrice = parseFloat(String(item.price).replace(/[^0-9.-]+/g, "")) || 0;
-                      const qty = Number(item.quantity || 1);
-                      const lineTotal = unitPrice * qty;
-                      return (
-                        <tr key={index} className="border-b border-gray-200 dark:border-gray-700">
-                          <td className="py-3 flex items-center gap-3 w-1/3">
-                            <img src={item.img} alt={item.name} className="w-12 h-12 object-cover rounded" />
-                            <div>
-                              <div className="font-medium">{item.name}</div>
-                            </div>
-                          </td>
-                          <td className="py-3">
-                            {item.size && <div>Size: <span className="font-medium">{item.size}</span></div>}
-                            {item.color && <div>Color: <span className="font-medium">{item.color}</span></div>}
-                          </td>
-                          <td className="py-3 text-center">{qty}</td>
-                          <td className="py-3 text-right">₦{unitPrice.toLocaleString()}</td>
-                          <td className="py-3 text-right font-semibold">₦{lineTotal.toLocaleString()}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              )}
-            </div>
+            <OrdersTable items={cartItems} />
 
             <div className="mb-4">
               <p className="text-lg font-semibold">Subtotal: ₦{Number(totalAmount).toLocaleString()}</p>
@@ -231,189 +197,28 @@ const CheckoutPage: React.FC = () => {
               <p className="text-xl font-bold mt-2">Total: ₦{finalTotal.toLocaleString()}</p>
             </div>
 
+            <RecentOrders orders={orders} />
+
             <button
               onClick={handleCheckout}
-              className="w-full bg-green-600 text-white py-3 rounded-lg hover:opacity-90"
+              disabled={processing || cartItems.length === 0}
+              className={`w-full py-3 rounded-lg ${processing || cartItems.length === 0 ? 'bg-gray-400 text-gray-700 cursor-not-allowed' : 'bg-green-600 text-white hover:opacity-90'}`}
             >
-              Proceed to Payment
+              {processing ? 'Processing…' : 'Proceed to Payment'}
             </button>
           </div>
+        </div>
         </div>
       </section>
 
-      {/* ---------------- Shipping Modal ---------------- */}
-      {showShippingModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl w-11/12 max-w-md shadow-lg">
-            <h2 className="text-xl font-semibold mb-4">Choose Shipping Location</h2>
+      <OrderPreviewModal order={orderPreview} visible={showOrderModal} processing={processing} onConfirm={proceedToPayment} onCancel={() => setShowOrderModal(false)} />
 
-            <div className="max-h-64 overflow-y-auto space-y-2">
-              {shippingOptions.map((opt) => (
-                <button
-                  key={opt.state}
-                  onClick={() => onSelectShipping(opt)}
-                  className="w-full text-left p-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
-                >
-                  {opt.state} — ₦{opt.price.toLocaleString()}
-                </button>
-              ))}
-            </div>
+      {/* Shipping selection is handled inline via ShippingSelector component */}
 
-            <button
-              onClick={() => setShowShippingModal(false)}
-              className="mt-4 w-full bg-red-500 text-white py-2 rounded-lg"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      )}
+      {
+        showDeliveryModal &&       <DeliveryModal value={deliveryInfo} onChange={setDeliveryInfo} onSave={onSaveDelivery} onClose={() => setShowDeliveryModal(false)} />
 
-      {/* ---------------- Delivery Modal ---------------- */}
-      {showDeliveryModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-          <div className="bg-white dark:bg-gray-800 p-6 rounded-xl w-full max-w-2xl shadow-lg overflow-y-auto max-h-[90vh]">
-            <h2 className="text-xl font-semibold mb-4">Delivery Details</h2>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <input
-                placeholder="Full Name"
-                className="border rounded-lg p-2 dark:bg-gray-700 dark:text-white"
-                value={deliveryInfo.fullName}
-                onChange={(e) =>
-                  setDeliveryInfo({ ...deliveryInfo, fullName: e.target.value })
-                }
-              />
-
-              <input
-                placeholder="Email"
-                className="border rounded-lg p-2 dark:bg-gray-700 dark:text-white"
-                value={deliveryInfo.email}
-                onChange={(e) =>
-                  setDeliveryInfo({ ...deliveryInfo, email: e.target.value })
-                }
-              />
-
-              {/* Phone: country phone code selector + number */}
-              <div className="flex gap-2">
-                <select
-                  className="border rounded-lg p-2 dark:bg-gray-700 dark:text-white"
-                  value={deliveryInfo.phoneCode}
-                  onChange={(e) =>
-                    setDeliveryInfo({ ...deliveryInfo, phoneCode: e.target.value })
-                  }
-                    aria-label="Country phone code"
-                >
-                  <option value="">Code</option>
-                    {allCountries.map((c) => (
-                      <option key={c.isoCode} value={c.phonecode ?? ""}>
-                        {c.flag ?? c.isoCode} {c.name} ({c.phonecode ?? ""})
-                      </option>
-                    ))}
-                </select>
-
-                <input
-                  placeholder="Phone number"
-                  className="border rounded-lg p-2 flex-1 dark:bg-gray-700 dark:text-white"
-                  value={deliveryInfo.phone}
-                  onChange={(e) =>
-                    setDeliveryInfo({ ...deliveryInfo, phone: e.target.value })
-                  }
-                />
-              </div>
-
-              {/* Country */}
-              <select
-                className="border rounded-lg p-2 dark:bg-gray-700 dark:text-white"
-                value={deliveryInfo.countryIso}
-                onChange={(e) => {
-                  const iso = e.target.value;
-                  const c = Country.getCountryByCode(iso);
-                  setDeliveryInfo({
-                    ...deliveryInfo,
-                    countryIso: iso,
-                    countryName: c?.name || "",
-                    stateIso: "",
-                    stateName: "",
-                    cityName: "",
-                  });
-                }}
-                aria-label="Country"
-              >
-                <option value="">Select Country</option>
-                {allCountries.map((c) => (
-                  <option key={c.isoCode} value={c.isoCode}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-
-              {/* State (depends on country) */}
-              <select
-                className="border rounded-lg p-2 dark:bg-gray-700 dark:text-white"
-                value={deliveryInfo.stateIso}
-                onChange={(e) => {
-                  const sIso = e.target.value;
-                  const stateObj = State.getStateByCodeAndCountry(
-                    sIso,
-                    deliveryInfo.countryIso
-                  );
-                  setDeliveryInfo({
-                    ...deliveryInfo,
-                    stateIso: sIso,
-                    stateName: stateObj?.name ?? "",
-                    cityName: "",
-                  });
-                }}
-                disabled={!deliveryInfo.countryIso}
-                aria-label="State"
-              >
-                <option value="">{deliveryInfo.countryIso ? "Select State" : "Select Country first"}</option>
-                {deliveryInfo.countryIso &&
-                  State.getStatesOfCountry(deliveryInfo.countryIso).map((s) => (
-                    <option key={s.isoCode} value={s.isoCode}>
-                      {s.name}
-                    </option>
-                  ))}
-              </select>
-
-              {/* City (depends on state+country) */}
-              <select
-                className="border rounded-lg p-2 dark:bg-gray-700 dark:text-white"
-                value={deliveryInfo.cityName}
-                onChange={(e) => setDeliveryInfo({ ...deliveryInfo, cityName: e.target.value })}
-                disabled={!deliveryInfo.stateIso}
-                aria-label="City"
-              >
-                <option value="">{deliveryInfo.stateIso ? "Select City" : "Select State first"}</option>
-                {deliveryInfo.countryIso &&
-                  deliveryInfo.stateIso &&
-                  City.getCitiesOfState(deliveryInfo.countryIso, deliveryInfo.stateIso).map((ct) => (
-                    <option key={ct.name} value={ct.name}>
-                      {ct.name}
-                    </option>
-                  ))}
-              </select>
-            </div>
-
-            <div className="mt-4 flex gap-3">
-              <button
-                onClick={() => onSaveDelivery(deliveryInfo)}
-                className="bg-primary text-white py-2 px-4 rounded-lg"
-              >
-                Save & Close
-              </button>
-
-              <button
-                onClick={() => setShowDeliveryModal(false)}
-                className="bg-red-600 text-white py-2 px-4 rounded-lg"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      }
     </>
   );
 };

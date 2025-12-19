@@ -3,6 +3,7 @@ import Navbar from "../components/Navbar";
 import ProductForm from "./ProductForm";
 import ProductList from "./ProductList";
 import OrdersList from "./OrderLIst";
+import ShippingPrices from "./ShippingPrices";
 
 const AdminDashboard: React.FC = () => {
   const [products, setProducts] = useState<any[]>([]);
@@ -62,6 +63,7 @@ const AdminDashboard: React.FC = () => {
       <Navbar />
       <div className="max-w-7xl mx-auto p-6 flex flex-col gap-8">
         <ProductForm onSubmit={handleAddProduct} initialData={editingProduct} />
+        <ShippingPrices />
         <ProductList products={products} onEdit={handleEditProduct} onDelete={handleDeleteProduct} />
         <OrdersList orders={orders} />
       </div>
