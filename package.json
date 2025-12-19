@@ -12,6 +12,7 @@
     "tw:build": "tailwindcss -i ./src/index.css -o ./src/output.css --watch"
   },
   "dependencies": {
+    "axios": "^1.13.2",
     "country-state-city": "^3.2.1",
     "firebase": "^12.5.0",
     "framer-motion": "^12.23.24",
